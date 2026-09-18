@@ -1,0 +1,495 @@
+####################################################################
+############## The only line that needs to be adapted ##############
+####################################################################
+binpath="/shared/home/cfraisserios/bin/dils4D/bin" # binpath: path to binaries for ABC inferences
+
+
+#######################################################################################################
+############## You can change everything underneath, but I don't guarantee it will work. ##############
+#######################################################################################################
+
+
+## datapath: path to directory where inferences will be performed
+datapath = config['datapath'] #datapath="/home/croux/Programmes/DILS_4pop/example/analysis"
+
+## input file: path to the fasta input file
+inputFile = config['inputFile'] #inputFile="/home/croux/Programmes/DILS_4pop/example/data/100_RNAseq.fasta"
+
+# parameters
+## coding or noncoding
+region = config['region'] #region="coding"
+
+## number of simulations and iterations
+nMultilocus = 10000 #2026-07 CFraisseRios - increase the number of multilocus simulations from 1000 to 10000
+nIteration = 10
+nIteration_gof = 2
+
+## mutation
+mutation_modelComp="nSNPs" # can be 'mu' (mutations within simulations are conditionned on the molecular clock) or 'nSNPs' (mutations are directly conditionned on the observed number of SNPs for each loci).
+mutation_paramEstim="mu" # can be 'mu' (mutations within simulations are conditionned on the molecular clock) or 'nSNPs' (mutations are directly conditionned on the observed number of SNPs for each loci).
+
+## filtering
+nameA = config['nameA'] # "E1" # name of species/population A
+nameB = config['nameB'] # "W3"
+nameC = config['nameC'] # "W1"
+nameD = config['nameD'] # "W2"
+maxN = config['maxN'] # 0.5 # loci with a proportion of missing data (i.e, non A, T, C or G) above maxN are excluded
+nMin = config['nMin'] # 8 # loci with less than nMin gametes are excluded
+Lmin = config['Lmin'] # 200 # loci with less than Lmin valid positions (without missing data, and in at least nMin copies) are excluded
+
+## bpfile
+mu = config['mu'] # 0.00000000731 # mutation rate per position and per generation. Used only if mutation='mu'
+rec = config['rec'] # 0.00000000731 # recombination rate per position and per generation
+Nref = 100000 # don't touch
+
+## prior distributions
+N_bound_min = config['N_bound_min'] # 0  # effective population sizes
+N_bound_max = config['N_bound_max'] # 10
+T_bound_min = config['T_bound_min'] # 1 # time of demographic events
+T_bound_max = config['T_bound_max'] # 10
+M_bound_min = config['M_bound_min'] # 0.4 # migration rates in 4.N.m
+M_bound_max = config['M_bound_max'] # 40
+shape_bound_min = config['shape_bound_min'] # 1 # shape parameters of the Beta distributions
+shape_bound_max = config['shape_bound_max'] # 20
+
+# models: topo1 (A;((B;C); D)), topo2 (A;(B;(C;D))) or topo3 ((A;B);(C;D))
+LISTE_MODELES = config['topologies'].split(',') # ["topo1", "topo2", "topo3"]
+
+## migration relationships
+if ',' in str(config['migAB']):
+	LISTE_MIGAB = config['migAB'].split(',') # ['0', '1'] # isolation ('0') and migration ('1') between species A and B will be compared here
+else:
+	LISTE_MIGAB = [config['migAB']]
+
+if ',' in str(config['migAC']):
+	LISTE_MIGAC = config['migAC'].split(',') #['0'] # only isolation between A and C will be assumed here
+else:
+	LISTE_MIGAC = [config['migAC']]
+
+if ',' in str(config['migAD']):
+	LISTE_MIGAD = config['migAD'].split(',') #['1'] # only migration between A and D will be assumed here
+else:
+	LISTE_MIGAD = [config['migAD']]
+
+if ',' in str(config['migBC']):
+	LISTE_MIGBC = config['migBC'].split(',') #['0'] # only isolation between B and C will be assumed here
+else:
+	LISTE_MIGBC = [config['migBC']]
+
+if ',' in str(config['migBD']):
+	LISTE_MIGBD = config['migBD'].split(',') #['0', '1'] # to test migration between B and D
+else:
+	LISTE_MIGBD = [config['migBD']]
+
+if ',' in str(config['migCD']):
+	LISTE_MIGCD = config['migCD'].split(',')
+else:
+	LISTE_MIGCD = [config['migCD']]
+
+## number of independent replicates of nMultilocus simulations for each model
+ITERATIONS=range(nIteration)
+ITERATIONS_GOF=range(nIteration_gof)
+
+############
+# WORKFLOW #
+############
+# -------- #
+#############
+# last rule #
+#############
+rule all:
+	input:
+		expand("{datapath}/modelComp/best_model_vector.txt", datapath=datapath),
+		expand("{datapath}/modelComp/best_model_table.txt", datapath=datapath),
+		expand("{datapath}/param/posterior.txt", datapath=datapath),
+		expand("{datapath}/opti1/posterior.txt", datapath=datapath),
+		expand("{datapath}/opti2/posterior.txt", datapath=datapath),
+		expand("{datapath}/opti3/posterior.txt", datapath=datapath),
+		expand("{datapath}/opti4/posterior.txt", datapath=datapath),
+		expand("{datapath}/opti5/posterior.txt", datapath=datapath),
+		expand("{datapath}/gof.txt", datapath=datapath),
+		expand("{datapath}/gof.pdf", datapath=datapath)
+
+#######################################
+# prepare input files for simulations #
+#######################################
+rule makeInputFiles:
+	input:
+		inputFile
+	output:
+		expand("{datapath}/bpfile", datapath=datapath),
+		expand("{datapath}/ABCstat.txt", datapath=datapath),
+		expand("{datapath}/general_infos.txt", datapath=datapath)
+	shell:
+		"python3 {binpath}/fasta2bpfile.py binpath={binpath} simulationpath={datapath} datapath={datapath} fastafile={inputFile} spA={nameA} spB={nameB} spC={nameC} spD={nameD} maxN={maxN} nMin={nMin} region={region} Lmin={Lmin} mu={mu} rec={rec} Nref={Nref}"
+
+####################
+# model comparison #
+####################
+###################
+# run simulations #
+###################
+rule simulations4modelComp:
+	input:
+		bpfile=expand("{datapath}/bpfile", datapath=datapath)
+	output:
+		"{datapath}/modelComp/{model}_{AB}_{AC}_{AD}_{BC}_{BD}_{CD}_{iteration}/ABCstat.txt",
+		"{datapath}/modelComp/{model}_{AB}_{AC}_{AD}_{BC}_{BD}_{CD}_{iteration}/priorfile.txt"
+	shell:
+		"echo {wildcards.model} {wildcards.AB} {wildcards.AC} {wildcards.AD} {wildcards.BC} {wildcards.BD} {wildcards.CD} >> {datapath}/liste_models.txt; "
+		"simulationpath={datapath}/modelComp/{wildcards.model}_{wildcards.AB}_{wildcards.AC}_{wildcards.AD}_{wildcards.BC}_{wildcards.BD}_{wildcards.CD}_{wildcards.iteration}; "
+		"python3 {binpath}/simulations_4pop.py binpath={binpath} datapath={datapath} simulationpath=$simulationpath model={wildcards.model} nMultilocus={nMultilocus} mutation={mutation_modelComp} AB={wildcards.AB} AC={wildcards.AC} AD={wildcards.AD} BC={wildcards.BC} BD={wildcards.BD} CD={wildcards.CD} N={N_bound_min} N={N_bound_max} T={T_bound_min} T={T_bound_max} M={M_bound_min} M={M_bound_max} shape={shape_bound_min} shape={shape_bound_max} target=posterior posteriorFile=None"
+
+##############
+# inferences #
+##############
+rule modelComp:
+	input:
+		stats=expand("{datapath}/modelComp/{model}_{AB}_{AC}_{AD}_{BC}_{BD}_{CD}_{iteration}/ABCstat.txt", datapath=datapath, model=LISTE_MODELES, AB=LISTE_MIGAB, AC=LISTE_MIGAC, AD=LISTE_MIGAD, BC=LISTE_MIGBC, BD=LISTE_MIGBD, CD=LISTE_MIGCD, iteration=ITERATIONS),
+		prior=expand("{datapath}/modelComp/{model}_{AB}_{AC}_{AD}_{BC}_{BD}_{CD}_{iteration}/priorfile.txt", datapath=datapath, model=LISTE_MODELES, AB=LISTE_MIGAB, AC=LISTE_MIGAC, AD=LISTE_MIGAD, BC=LISTE_MIGBC, BD=LISTE_MIGBD, CD=LISTE_MIGCD, iteration=ITERATIONS)
+	output:
+		expand("{datapath}/modelComp/best_model_vector.txt", datapath=datapath),
+		expand("{datapath}/modelComp/best_model_table.txt", datapath=datapath)
+	shell:
+		"Rscript {binpath}/model_comp.R nIteration={nIteration} datapath={datapath}"
+
+
+########################
+# parameter estimates  #
+########################
+###################
+# run simulations #
+###################
+rule simulations4estimates:
+	input:
+		expand("{datapath}/modelComp/best_model_vector.txt", datapath=datapath),
+		expand("{datapath}/modelComp/best_model_table.txt", datapath=datapath)
+	output:
+		"{datapath}/param/best_{iteration}/ABCstat.txt",
+		"{datapath}/param/best_{iteration}/priorfile.txt"
+	shell:
+		"bestTopo=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $1}}'); "
+		"bestAB=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $2}}'); "
+		"bestAC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $3}}'); "
+		"bestAD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $4}}'); "
+		"bestBC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $5}}'); "
+		"bestBD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $6}}'); "
+		"bestCD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $7}}'); "
+		"simulationpath={datapath}/param/best_{wildcards.iteration}; "
+		"python3 {binpath}/simulations_4pop.py binpath={binpath} datapath={datapath} simulationpath=$simulationpath model=${{bestTopo}} nMultilocus={nMultilocus} mutation={mutation_paramEstim} AB=${{bestAB}} AC=${{bestAC}} AD=${{bestAD}} BC=${{bestBC}} BD=${{bestBD}} CD=${{bestCD}} N={N_bound_min} N={N_bound_max} T={T_bound_min} T={T_bound_max} M={M_bound_min} M={M_bound_max} shape={shape_bound_min} shape={shape_bound_max} target=posterior posteriorFile=None"
+
+########################
+# inferences posterior #
+########################
+rule paramEstimates:
+	input:
+		expand("{datapath}/param/best_{iteration}/ABCstat.txt", datapath=datapath, iteration=ITERATIONS),
+		expand("{datapath}/param/best_{iteration}/priorfile.txt", datapath=datapath, iteration=ITERATIONS)
+	output:
+		expand("{datapath}/param/posterior.txt", datapath=datapath)
+	shell:
+		"Rscript {binpath}/param.R nIteration={nIteration} datapath={datapath} subdir=param"
+
+
+###################
+# optimization 1  #
+###################
+###################
+# run simulations #
+###################
+rule simulations_opti1:
+	input:
+		expand("{datapath}/param/posterior.txt", datapath=datapath)
+	output:
+		"{datapath}/opti1/best_{iteration}/ABCstat.txt",
+		"{datapath}/opti1/best_{iteration}/priorfile.txt"
+	shell:
+		"bestTopo=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $1}}'); "
+		"bestAB=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $2}}'); "
+		"bestAC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $3}}'); "
+		"bestAD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $4}}'); "
+		"bestBC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $5}}'); "
+		"bestBD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $6}}'); "
+		"bestCD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $7}}'); "
+		"simulationpath={datapath}/opti1/best_{wildcards.iteration}; "
+		"python3 {binpath}/simulations_4pop.py binpath={binpath} datapath={datapath} simulationpath=$simulationpath model=${{bestTopo}} nMultilocus={nMultilocus} mutation={mutation_paramEstim} AB=${{bestAB}} AC=${{bestAC}} AD=${{bestAD}} BC=${{bestBC}} BD=${{bestBD}} CD=${{bestCD}} N={N_bound_min} N={N_bound_max} T={T_bound_min} T={T_bound_max} M={M_bound_min} M={M_bound_max} shape={shape_bound_min} shape={shape_bound_max} target=opti1 posteriorFile={input}"
+
+#####################
+# inferences opti 1 #
+#####################
+rule opti1:
+	input:
+		expand("{datapath}/opti1/best_{iteration}/ABCstat.txt", datapath=datapath, iteration=ITERATIONS),
+		expand("{datapath}/opti1/best_{iteration}/priorfile.txt", datapath=datapath, iteration=ITERATIONS)
+	output:
+		expand("{datapath}/opti1/posterior.txt", datapath=datapath)
+	shell:
+		"Rscript {binpath}/param.R nIteration={nIteration} datapath={datapath} subdir=opti1"
+
+###################
+# optimization 2  #
+###################
+###################
+# run simulations #
+###################
+rule simulations_opti2:
+	input:
+		expand("{datapath}/opti1/posterior.txt", datapath=datapath)
+	output:
+		"{datapath}/opti2/best_{iteration}/ABCstat.txt",
+		"{datapath}/opti2/best_{iteration}/priorfile.txt"
+	shell:
+		"bestTopo=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $1}}'); "
+		"bestAB=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $2}}'); "
+		"bestAC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $3}}'); "
+		"bestAD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $4}}'); "
+		"bestBC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $5}}'); "
+		"bestBD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $6}}'); "
+		"bestCD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $7}}'); "
+		"simulationpath={datapath}/opti2/best_{wildcards.iteration}; "
+		"python3 {binpath}/simulations_4pop.py binpath={binpath} datapath={datapath} simulationpath=$simulationpath model=${{bestTopo}} nMultilocus={nMultilocus} mutation={mutation_paramEstim} AB=${{bestAB}} AC=${{bestAC}} AD=${{bestAD}} BC=${{bestBC}} BD=${{bestBD}} CD=${{bestCD}} N={N_bound_min} N={N_bound_max} T={T_bound_min} T={T_bound_max} M={M_bound_min} M={M_bound_max} shape={shape_bound_min} shape={shape_bound_max} target=opti2 posteriorFile={input}"
+
+#####################
+# inferences opti 2 #
+#####################
+rule opti2:
+	input:
+		expand("{datapath}/opti2/best_{iteration}/ABCstat.txt", datapath=datapath, iteration=ITERATIONS),
+		expand("{datapath}/opti2/best_{iteration}/priorfile.txt", datapath=datapath, iteration=ITERATIONS)
+	output:
+		expand("{datapath}/opti2/posterior.txt", datapath=datapath)
+	shell:
+		"Rscript {binpath}/param.R nIteration={nIteration} datapath={datapath} subdir=opti2"
+
+###################
+# optimization 3  #
+###################
+###################
+# run simulations #
+###################
+rule simulations_opti3:
+	input:
+		expand("{datapath}/opti2/posterior.txt", datapath=datapath)
+	output:
+		"{datapath}/opti3/best_{iteration}/ABCstat.txt",
+		"{datapath}/opti3/best_{iteration}/priorfile.txt"
+	shell:
+		"bestTopo=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $1}}'); "
+		"bestAB=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $2}}'); "
+		"bestAC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $3}}'); "
+		"bestAD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $4}}'); "
+		"bestBC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $5}}'); "
+		"bestBD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $6}}'); "
+		"bestCD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $7}}'); "
+		"simulationpath={datapath}/opti3/best_{wildcards.iteration}; "
+		"python3 {binpath}/simulations_4pop.py binpath={binpath} datapath={datapath} simulationpath=$simulationpath model=${{bestTopo}} nMultilocus={nMultilocus} mutation={mutation_paramEstim} AB=${{bestAB}} AC=${{bestAC}} AD=${{bestAD}} BC=${{bestBC}} BD=${{bestBD}} CD=${{bestCD}} N={N_bound_min} N={N_bound_max} T={T_bound_min} T={T_bound_max} M={M_bound_min} M={M_bound_max} shape={shape_bound_min} shape={shape_bound_max} target=opti3 posteriorFile={input}"
+
+#####################
+# inferences opti 3 #
+#####################
+rule opti3:
+	input:
+		expand("{datapath}/opti3/best_{iteration}/ABCstat.txt", datapath=datapath, iteration=ITERATIONS),
+		expand("{datapath}/opti3/best_{iteration}/priorfile.txt", datapath=datapath, iteration=ITERATIONS)
+	output:
+		expand("{datapath}/opti3/posterior.txt", datapath=datapath)
+	shell:
+		"Rscript {binpath}/param.R nIteration={nIteration} datapath={datapath} subdir=opti3"
+
+###################
+# optimization 4  #
+###################
+###################
+# run simulations #
+###################
+rule simulations_opti4:
+	input:
+		expand("{datapath}/opti3/posterior.txt", datapath=datapath)
+	output:
+		"{datapath}/opti4/best_{iteration}/ABCstat.txt",
+		"{datapath}/opti4/best_{iteration}/priorfile.txt"
+	shell:
+		"bestTopo=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $1}}'); "
+		"bestAB=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $2}}'); "
+		"bestAC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $3}}'); "
+		"bestAD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $4}}'); "
+		"bestBC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $5}}'); "
+		"bestBD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $6}}'); "
+		"bestCD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $7}}'); "
+		"simulationpath={datapath}/opti4/best_{wildcards.iteration}; "
+		"python3 {binpath}/simulations_4pop.py binpath={binpath} datapath={datapath} simulationpath=$simulationpath model=${{bestTopo}} nMultilocus={nMultilocus} mutation={mutation_paramEstim} AB=${{bestAB}} AC=${{bestAC}} AD=${{bestAD}} BC=${{bestBC}} BD=${{bestBD}} CD=${{bestCD}} N={N_bound_min} N={N_bound_max} T={T_bound_min} T={T_bound_max} M={M_bound_min} M={M_bound_max} shape={shape_bound_min} shape={shape_bound_max} target=opti4 posteriorFile={input}"
+
+#####################
+# inferences opti 4 #
+#####################
+rule opti4:
+	input:
+		expand("{datapath}/opti4/best_{iteration}/ABCstat.txt", datapath=datapath, iteration=ITERATIONS),
+		expand("{datapath}/opti4/best_{iteration}/priorfile.txt", datapath=datapath, iteration=ITERATIONS)
+	output:
+		expand("{datapath}/opti4/posterior.txt", datapath=datapath)
+	shell:
+		"Rscript {binpath}/param.R nIteration={nIteration} datapath={datapath} subdir=opti4"
+
+###################
+# optimization 5  #
+###################
+###################
+# run simulations #
+###################
+rule simulations_opti5:
+	input:
+		expand("{datapath}/opti4/posterior.txt", datapath=datapath)
+	output:
+		"{datapath}/opti5/best_{iteration}/ABCstat.txt",
+		"{datapath}/opti5/best_{iteration}/priorfile.txt"
+	shell:
+		"bestTopo=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $1}}'); "
+		"bestAB=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $2}}'); "
+		"bestAC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $3}}'); "
+		"bestAD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $4}}'); "
+		"bestBC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $5}}'); "
+		"bestBD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $6}}'); "
+		"bestCD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $7}}'); "
+		"simulationpath={datapath}/opti5/best_{wildcards.iteration}; "
+		"python3 {binpath}/simulations_4pop.py binpath={binpath} datapath={datapath} simulationpath=$simulationpath model=${{bestTopo}} nMultilocus={nMultilocus} mutation={mutation_paramEstim} AB=${{bestAB}} AC=${{bestAC}} AD=${{bestAD}} BC=${{bestBC}} BD=${{bestBD}} CD=${{bestCD}} N={N_bound_min} N={N_bound_max} T={T_bound_min} T={T_bound_max} M={M_bound_min} M={M_bound_max} shape={shape_bound_min} shape={shape_bound_max} target=opti5 posteriorFile={input}"
+
+#####################
+# inferences opti 5 #
+#####################
+rule opti5:
+	input:
+		expand("{datapath}/opti5/best_{iteration}/ABCstat.txt", datapath=datapath, iteration=ITERATIONS),
+		expand("{datapath}/opti5/best_{iteration}/priorfile.txt", datapath=datapath, iteration=ITERATIONS)
+	output:
+		expand("{datapath}/opti5/posterior.txt", datapath=datapath)
+	shell:
+		"Rscript {binpath}/param.R nIteration={nIteration} datapath={datapath} subdir=opti5"
+
+###################
+
+###################
+# goodness of fit #
+###################
+rule gof_posterior:
+	input:
+		expand("{datapath}/param/posterior.txt", datapath=datapath)
+	output:
+		"{datapath}/gof_param/best_{iteration_gof}/ABCstat.txt",
+		"{datapath}/gof_param/best_{iteration_gof}/priorfile.txt"
+	shell:
+		"bestTopo=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $1}}'); "
+		"bestAB=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $2}}'); "
+		"bestAC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $3}}'); "
+		"bestAD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $4}}'); "
+		"bestBC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $5}}'); "
+		"bestBD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $6}}'); "
+		"bestCD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $7}}'); "
+		"simulationpath={datapath}/gof_param/best_{wildcards.iteration_gof}; "
+		"python3 {binpath}/simulations_4pop.py binpath={binpath} datapath={datapath} simulationpath=$simulationpath model=${{bestTopo}} nMultilocus={nMultilocus} mutation={mutation_paramEstim} AB=${{bestAB}} AC=${{bestAC}} AD=${{bestAD}} BC=${{bestBC}} BD=${{bestBD}} CD=${{bestCD}} N={N_bound_min} N={N_bound_max} T={T_bound_min} T={T_bound_max} M={M_bound_min} M={M_bound_max} shape={shape_bound_min} shape={shape_bound_max} target=gof posteriorFile={input}"
+
+rule gof_opti1:
+	input:
+		expand("{datapath}/opti1/posterior.txt", datapath=datapath)
+	output:
+		"{datapath}/gof_opti1/best_{iteration_gof}/ABCstat.txt",
+		"{datapath}/gof_opti1/best_{iteration_gof}/priorfile.txt"
+	shell:
+		"bestTopo=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $1}}'); "
+		"bestAB=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $2}}'); "
+		"bestAC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $3}}'); "
+		"bestAD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $4}}'); "
+		"bestBC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $5}}'); "
+		"bestBD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $6}}'); "
+		"bestCD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $7}}'); "
+		"simulationpath={datapath}/gof_opti1/best_{wildcards.iteration_gof}; "
+		"python3 {binpath}/simulations_4pop.py binpath={binpath} datapath={datapath} simulationpath=$simulationpath model=${{bestTopo}} nMultilocus={nMultilocus} mutation={mutation_paramEstim} AB=${{bestAB}} AC=${{bestAC}} AD=${{bestAD}} BC=${{bestBC}} BD=${{bestBD}} CD=${{bestCD}} N={N_bound_min} N={N_bound_max} T={T_bound_min} T={T_bound_max} M={M_bound_min} M={M_bound_max} shape={shape_bound_min} shape={shape_bound_max} target=gof posteriorFile={input}"
+
+rule gof_opti2:
+	input:
+		expand("{datapath}/opti2/posterior.txt", datapath=datapath)
+	output:
+		"{datapath}/gof_opti2/best_{iteration_gof}/ABCstat.txt",
+		"{datapath}/gof_opti2/best_{iteration_gof}/priorfile.txt"
+	shell:
+		"bestTopo=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $1}}'); "
+		"bestAB=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $2}}'); "
+		"bestAC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $3}}'); "
+		"bestAD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $4}}'); "
+		"bestBC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $5}}'); "
+		"bestBD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $6}}'); "
+		"bestCD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $7}}'); "
+		"simulationpath={datapath}/gof_opti2/best_{wildcards.iteration_gof}; "
+		"python3 {binpath}/simulations_4pop.py binpath={binpath} datapath={datapath} simulationpath=$simulationpath model=${{bestTopo}} nMultilocus={nMultilocus} mutation={mutation_paramEstim} AB=${{bestAB}} AC=${{bestAC}} AD=${{bestAD}} BC=${{bestBC}} BD=${{bestBD}} CD=${{bestCD}} N={N_bound_min} N={N_bound_max} T={T_bound_min} T={T_bound_max} M={M_bound_min} M={M_bound_max} shape={shape_bound_min} shape={shape_bound_max} target=gof posteriorFile={input}"
+
+rule gof_opti3:
+	input:
+		expand("{datapath}/opti3/posterior.txt", datapath=datapath)
+	output:
+		"{datapath}/gof_opti3/best_{iteration_gof}/ABCstat.txt",
+		"{datapath}/gof_opti3/best_{iteration_gof}/priorfile.txt"
+	shell:
+		"bestTopo=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $1}}'); "
+		"bestAB=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $2}}'); "
+		"bestAC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $3}}'); "
+		"bestAD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $4}}'); "
+		"bestBC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $5}}'); "
+		"bestBD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $6}}'); "
+		"bestCD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $7}}'); "
+		"simulationpath={datapath}/gof_opti3/best_{wildcards.iteration_gof}; "
+		"python3 {binpath}/simulations_4pop.py binpath={binpath} datapath={datapath} simulationpath=$simulationpath model=${{bestTopo}} nMultilocus={nMultilocus} mutation={mutation_paramEstim} AB=${{bestAB}} AC=${{bestAC}} AD=${{bestAD}} BC=${{bestBC}} BD=${{bestBD}} CD=${{bestCD}} N={N_bound_min} N={N_bound_max} T={T_bound_min} T={T_bound_max} M={M_bound_min} M={M_bound_max} shape={shape_bound_min} shape={shape_bound_max} target=gof posteriorFile={input}"
+
+rule gof_opti4:
+	input:
+		expand("{datapath}/opti4/posterior.txt", datapath=datapath)
+	output:
+		"{datapath}/gof_opti4/best_{iteration_gof}/ABCstat.txt",
+		"{datapath}/gof_opti4/best_{iteration_gof}/priorfile.txt"
+	shell:
+		"bestTopo=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $1}}'); "
+		"bestAB=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $2}}'); "
+		"bestAC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $3}}'); "
+		"bestAD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $4}}'); "
+		"bestBC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $5}}'); "
+		"bestBD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $6}}'); "
+		"bestCD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $7}}'); "
+		"simulationpath={datapath}/gof_opti4/best_{wildcards.iteration_gof}; "
+		"python3 {binpath}/simulations_4pop.py binpath={binpath} datapath={datapath} simulationpath=$simulationpath model=${{bestTopo}} nMultilocus={nMultilocus} mutation={mutation_paramEstim} AB=${{bestAB}} AC=${{bestAC}} AD=${{bestAD}} BC=${{bestBC}} BD=${{bestBD}} CD=${{bestCD}} N={N_bound_min} N={N_bound_max} T={T_bound_min} T={T_bound_max} M={M_bound_min} M={M_bound_max} shape={shape_bound_min} shape={shape_bound_max} target=gof posteriorFile={input}"
+
+rule gof_opti5:
+	input:
+		expand("{datapath}/opti5/posterior.txt", datapath=datapath)
+	output:
+		"{datapath}/gof_opti5/best_{iteration_gof}/ABCstat.txt",
+		"{datapath}/gof_opti5/best_{iteration_gof}/priorfile.txt"
+	shell:
+		"bestTopo=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $1}}'); "
+		"bestAB=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $2}}'); "
+		"bestAC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $3}}'); "
+		"bestAD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $4}}'); "
+		"bestBC=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $5}}'); "
+		"bestBD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $6}}'); "
+		"bestCD=$(cat {datapath}/modelComp/best_model_vector.txt | awk '{{print $7}}'); "
+		"simulationpath={datapath}/gof_opti5/best_{wildcards.iteration_gof}; "
+		"python3 {binpath}/simulations_4pop.py binpath={binpath} datapath={datapath} simulationpath=$simulationpath model=${{bestTopo}} nMultilocus={nMultilocus} mutation={mutation_paramEstim} AB=${{bestAB}} AC=${{bestAC}} AD=${{bestAD}} BC=${{bestBC}} BD=${{bestBD}} CD=${{bestCD}} N={N_bound_min} N={N_bound_max} T={T_bound_min} T={T_bound_max} M={M_bound_min} M={M_bound_max} shape={shape_bound_min} shape={shape_bound_max} target=gof posteriorFile={input}"
+
+rule gof:
+	input:
+		expand("{datapath}/gof_param/best_{iteration_gof}/ABCstat.txt", datapath=datapath, iteration_gof=ITERATIONS_GOF),
+		expand("{datapath}/gof_param/best_{iteration_gof}/priorfile.txt", datapath=datapath, iteration_gof=ITERATIONS_GOF),
+		expand("{datapath}/gof_opti1/best_{iteration_gof}/ABCstat.txt", datapath=datapath, iteration_gof=ITERATIONS_GOF),
+		expand("{datapath}/gof_opti1/best_{iteration_gof}/priorfile.txt", datapath=datapath, iteration_gof=ITERATIONS_GOF),
+		expand("{datapath}/gof_opti2/best_{iteration_gof}/ABCstat.txt", datapath=datapath, iteration_gof=ITERATIONS_GOF),
+		expand("{datapath}/gof_opti2/best_{iteration_gof}/priorfile.txt", datapath=datapath, iteration_gof=ITERATIONS_GOF),
+		expand("{datapath}/gof_opti3/best_{iteration_gof}/ABCstat.txt", datapath=datapath, iteration_gof=ITERATIONS_GOF),
+		expand("{datapath}/gof_opti3/best_{iteration_gof}/priorfile.txt", datapath=datapath, iteration_gof=ITERATIONS_GOF),
+		expand("{datapath}/gof_opti4/best_{iteration_gof}/ABCstat.txt", datapath=datapath, iteration_gof=ITERATIONS_GOF),
+		expand("{datapath}/gof_opti4/best_{iteration_gof}/priorfile.txt", datapath=datapath, iteration_gof=ITERATIONS_GOF),
+		expand("{datapath}/gof_opti5/best_{iteration_gof}/ABCstat.txt", datapath=datapath, iteration_gof=ITERATIONS_GOF),
+		expand("{datapath}/gof_opti5/best_{iteration_gof}/priorfile.txt", datapath=datapath, iteration_gof=ITERATIONS_GOF)
+	output:
+		expand("{datapath}/gof.txt", datapath=datapath),
+		expand("{datapath}/gof.pdf", datapath=datapath)
+	shell:
+		"Rscript {binpath}/gof.R nIteration={nIteration_gof} datapath={datapath}"
+

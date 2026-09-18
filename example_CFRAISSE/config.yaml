@@ -1,0 +1,27 @@
+inputFile: /shared/home/cfraisserios/2026_oysters/oysters_dils_input_5K_islands.fas # full pathway to the input file (fasta format)
+datapath: /shared/home/cfraisserios/2026_oysters/4D/results_linIM # full pathway to the directory where the analysis will be performed
+region: noncoding
+nameA: NS #n=7 diploid individuals
+nameB: MED_E #n=6 diploid individuals
+nameC: ATL #n=7 diploid individuals
+nameD: MED_W #n=7 diploid individuals
+maxN: 0.4
+nMin: 8
+Lmin: 500
+mu: 0.00000002763
+rec: 0.0000000002763
+N_bound_min: 0.01 # effective population sizes (Nref:100000)
+N_bound_max: 0.5 # ostrea_2pop=100000
+T_bound_min: 0.01 # time of demographic events
+T_bound_max: 1.0 #ostrea_2pop=500000
+M_bound_min: 0.4 # migration rates in 4.N.m
+M_bound_max: 100
+shape_bound_min: 0.01 # shape parameters of the Beta distributions
+shape_bound_max: 10
+topologies: topo3 #topo1=(A,((B,C),D)) or topo2=(A,(B,(C, D))) or topo3=((A, B),(C, D)) or topo1,topo2 or topo1,topo3 or topo2,topo3 or topo1,topo2,topo3
+migAB: 0 #0 (no migration) or 1 (migration) or 0,1
+migAC: 1
+migAD: 0
+migBC: 0
+migBD: 1
+migCD: 1

@@ -1,0 +1,137 @@
+{
+    "__default__" :
+    {
+        "node" : 1,
+        "ntasks" : 1,
+        "n" : 1,
+	"cpusPerTask" : 1,
+	"memPerCpu" : 3000,
+	"time" : "04:00:00"
+    },
+    "makeInputFiles" :
+    {
+	"cpusPerTask" : 10,
+	"time" : "10:00:00",
+	"memPerCpu" : 10000
+    },
+    "simulations4modelComp" :
+    {
+	"cpusPerTask" : 1,
+	"time" : "24:00:00",
+	"memPerCpu" : 5000
+    },
+    "modelComp" :
+    {
+	"cpusPerTask" : 8,
+	"time" : "10:00:00",
+	"memPerCpu" : 10000
+    },
+    "simulations4estimates" :
+    {
+	"cpusPerTask" : 1,
+	"time" : "24:00:00",
+	"memPerCpu" : 5000
+    },
+    "paramEstimates" :
+    {
+	"cpusPerTask" : 8,
+	"time" : "10:00:00",
+	"memPerCpu" : 5000 
+    },
+    "simulations_opti1" :
+    {
+	"cpusPerTask" : 1,
+	"time" : "24:00:00",
+	"memPerCpu" : 5000
+    },
+    "opti1" :
+    {
+	"cpusPerTask" : 8,
+	"time" : "10:00:00",
+	"memPerCpu" : 5000 
+    },
+    "simulations_opti2" :
+    {
+	"cpusPerTask" : 1,
+	"time" : "24:00:00",
+	"memPerCpu" : 5000
+    },
+    "opti2" :
+    {
+	"cpusPerTask" : 8,
+	"time" : "10:00:00",
+	"memPerCpu" : 5000 
+    },
+    "simulations_opti3" :
+    {
+	"cpusPerTask" : 1,
+	"time" : "24:00:00",
+	"memPerCpu" : 5000
+    },
+    "opti3" :
+    {
+	"cpusPerTask" : 8,
+	"time" : "10:00:00",
+	"memPerCpu" : 5000
+    },
+    "simulations_opti4" :
+    {
+	"cpusPerTask" : 1,
+	"time" : "24:00:00",
+	"memPerCpu" : 5000
+    },
+    "opti4" :
+    {
+	"cpusPerTask" : 8,
+	"time" : "10:00:00",
+	"memPerCpu" :5000 
+    },
+    "simulations_opti5" :
+    {
+	"cpusPerTask" : 1,
+	"time" : "24:00:00",
+	"memPerCpu" : 5000
+    },
+    "opti5" :
+    {
+	"cpusPerTask" : 8,
+	"time" : "10:00:00",
+	"memPerCpu" : 5000
+    },
+    "gof_posterior" :
+    {
+	"cpusPerTask" : 1,
+	"time" : "24:00:00",
+	"memPerCpu" : 10000
+    },
+    "gof_opti1" :
+    {
+	"cpusPerTask" : 1,
+	"time" : "24:00:00",
+	"memPerCpu" : 10000
+    },
+    "gof_opti2" :
+    {
+	"cpusPerTask" : 1,
+	"time" : "24:00:00",
+	"memPerCpu" : 10000
+    },
+    "gof_opti3" :
+    {
+	"cpusPerTask" : 1,
+	"time" : "24:00:00",
+	"memPerCpu" : 10000
+    },
+    "gof_opti4" :
+    {
+	"cpusPerTask" : 1,
+	"time" : "24:00:00",
+	"memPerCpu" : 10000
+    },
+    "gof_opti5" :
+    {
+	"cpusPerTask" : 1,
+	"time" : "24:00:00",
+	"memPerCpu" : 10000
+    }
+}
