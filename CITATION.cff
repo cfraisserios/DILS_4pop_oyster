@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the information below."
+
+title: "DILS_4pop_oyster"
+version: "1.0.0"
+date-released: 2026-09-18
+
+authors:
+  - family-names: "Fraisse"
+    given-names: "Christelle"
+  - family-names: "Roux"
+    given-names: "Camille"
+
+repository-code: "https://github.com/cfraisserios/DILS_4pop_oyster"
+
+keywords:
+  - "population genetics"
+  - "demographic inference"
+  - "four populations"
+  - "DILS"
+
+abstract: >
+  Code and scripts for demographic inference in four populations.
+
+type: software
