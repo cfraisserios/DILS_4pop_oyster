@@ -6,9 +6,9 @@
 - [Snakefile](#snakefile)
 - [config file](#config-file)
 - [example](#example)
-- [oyster updates](#oyster updates)
+- [updates](#updates)
 
-Pipeline using snakemake to perform demographic inferences in 4-population models. Three topologies are possible as well as different migration relationships making a maximum of 768 comparable models, depending on the user's specifications. The code is the same as Camille Roux's code available at https://github.com/popgenomics/DILS_4pop, except for the modifications reported in the "oyster updates" section.
+Pipeline using snakemake to perform demographic inferences in 4-population models. Three topologies are possible as well as different migration relationships making a maximum of 768 comparable models, depending on the user's specifications. The code is the same as Camille Roux's code available at https://github.com/popgenomics/DILS_4pop, except for the modifications reported in the "updates" section.
 
 
 # get the pipeline  
@@ -141,7 +141,7 @@ snakemake -p --snakefile ~/Programmes/DILS_4pop/bin/Snakefile --configfile ~/Pro
 Of course, the file **config.yaml** has to be adapted by the user (i.e, by you), and can be located everywhere (not only in the DILS_4pop directory).  
 
 
-# oyster updates
+# updates
 The original scripts have a "@true" extension. In the modified scripts, see tag "CFraisseRios" for modifications.
 1. Python script **bin/priorgen_4pop.py** has been modified to correct a typo in the "topo3" with the times.
 2. Snakemake script **bin/Snakefile** has been modified to increase the number of multilocus simulations. If inference is taking too long, decrease this number.
